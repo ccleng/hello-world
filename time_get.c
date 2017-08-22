@@ -45,7 +45,7 @@ typedef struct
 	uint32_t txTm_f;         // 32 bits. Transmit time-stamp fraction of a second.
 } ntp_packet;                 // Total: 384 bits or 48 bytes.
 
-static int time_get(const char *pNTPhost)
+static int time_get_old(const char *pNTPhost)
 {
         int sockfd;
         int res, counter = 0;
@@ -55,7 +55,95 @@ static int time_get(const char *pNTPhost)
         struct sockaddr_in addr;
         struct timeval timeout = {3, 0};
         unsigned long ultime = 0, ulTime_net = 0;
-        //char hostname1[] = "time.nist.gov";//"time-b.nist.gov";//"time-a.nist.gov";//"time.windows.com";//"time-nw.nist.gov";//"time.nist.gov";
+        const char *pHostName = pNTPhost;
+
+GETHOST:
+        if((host = gethostbyname(pHostName)) != NULL) {
+                memcpy(&in.s_addr,host->h_addr,4);
+                pServerIP = inet_ntoa(in);
+                printf("the ip of [%s] is :%s\n", pHostName, pServerIP);
+        } else {
+                printf("cannot get the ip of the domain:%s\n",pHostName);
+                counter++;
+                if(counter > 1) {
+                        printf("cannot get ip of time_server\n");
+                        return -1;
+                }
+                sleep(1);
+                goto GETHOST;
+        }
+
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd  < 0) {
+                perror("socket creat");
+                return -1;
+        }
+
+        res = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(struct timeval));
+        if (res  < 0) {
+                perror("socket setsockopt");
+                return -1;
+        }
+
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(37);
+        addr.sin_addr.s_addr = inet_addr(pServerIP);
+
+        counter = 0;
+CONNECT:
+        res = connect(sockfd, (struct sockaddr *)&addr, sizeof(addr));
+        if (res  < 0) {
+                perror("socket connect");
+                counter++;
+                if(counter > 1) {
+                        printf("socket connetc failed\n");
+                        return -1;
+                }
+                sleep(1);
+                goto CONNECT;
+        }
+
+        counter = 0;
+RECV:
+        res = recv(sockfd, (char *)&ulTime_net, sizeof(ulTime_net), 0);
+        if (res  < 0) {
+                perror("socket recv");
+                counter++;
+                if(counter > 1) {
+                        printf("socket recv failed\n");
+                        return -1;
+                }
+                sleep(1);
+                goto RECV;
+        }
+
+        ultime = ntohl(ulTime_net);
+        ultime -= SECONDS_1900_1970;
+        //ultime += SECONDS_OF_8HOURS;
+        if(ultime > 2000000000) {
+                printf("time error reget\n");
+                close(sockfd);
+                sleep(1);
+                goto GETHOST;
+        }
+        printf("current time %lu, %s", ultime, ctime((time_t *)&ultime));
+        sprintf(time_str, "%ld", ultime);
+        close(sockfd);
+
+        return 0;
+}
+
+static int time_get_new(const char *pNTPhost)
+{
+        int sockfd;
+        int res, counter = 0;
+        char *pServerIP;
+        struct in_addr in;
+        struct hostent *host;
+        struct sockaddr_in addr;
+        struct timeval timeout = {3, 0};
+        unsigned long ultime = 0, ulTime_net = 0;
         const char *pHostName = pNTPhost;
 
 GETHOST:
@@ -144,18 +232,17 @@ RECV:
         return 0;
 }
 
-
 int main(int argc, char **argv)
 {
-	time_get("ntp1.aliyun.com");
-	//time_get("ntp2.aliyun.com");
-	//time_get("ntp3.aliyun.com");
-	//time_get("ntp4.aliyun.com");
-	//time_get("ntp5.aliyun.com");
-	//time_get("ntp6.aliyun.com");
-	//time_get("ntp7.aliyun.com");
-	time_get("time.nist.gov");
-	time_get("time-a.nist.gov");
-	time_get("time-b.nist.gov");
+	time_get_new("ntp1.aliyun.com");
+	//time_get_new("ntp2.aliyun.com");
+	time_get_new("ntp3.aliyun.com");
+	//time_get_new("ntp4.aliyun.com");
+	//time_get_new("ntp5.aliyun.com");
+	//time_get_new("ntp6.aliyun.com");
+	time_get_new("ntp7.aliyun.com");
+	time_get_old("time.nist.gov");
+	time_get_old("time-a.nist.gov");
+	time_get_old("time-b.nist.gov");
 	return 0;
 }
