@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <net/if.h>
 #include <sys/socket.h>
@@ -55,7 +56,7 @@ static int time_get(const char *pNTPhost)
         struct timeval timeout = {3, 0};
         unsigned long ultime = 0, ulTime_net = 0;
         //char hostname1[] = "time.nist.gov";//"time-b.nist.gov";//"time-a.nist.gov";//"time.windows.com";//"time-nw.nist.gov";//"time.nist.gov";
-        char *pHostName = pNTPhost;
+        const char *pHostName = pNTPhost;
 
 GETHOST:
         if((host = gethostbyname(pHostName)) != NULL) {
